@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marcolin · Tratamento de Dados</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --navy-950: #04091a;
+    --navy-900: #080f28;
+    --navy-800: #0d1a3e;
+    --navy-700: #122154;
+    --navy-600: #183070;
+    --navy-500: #1e408e;
+    --blue-400: #3b6fd4;
+    --blue-300: #5b8fe8;
+    --blue-200: #8ab2f0;
+    --accent:   #00c8ff;
+    --accent-dim: rgba(0,200,255,0.12);
+    --text-primary: #e8edf8;
+    --text-secondary: #8fa3cc;
+    --text-muted: #4d6490;
+    --glass: rgba(13,26,62,0.6);
+    --glass-border: rgba(59,111,212,0.25);
+    --success: #00e5a0;
+    --error:   #ff5370;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--navy-950);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(30,64,142,0.45) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 90% 80%, rgba(0,200,255,0.07) 0%, transparent 55%);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 20px 60px; overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    width: 100%; max-width: 860px;
+    padding: 52px 0 36px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 12px;
+    position: relative; z-index: 1;
+  }
+
+  .badge {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-dim);
+    border: 1px solid rgba(0,200,255,0.28); padding: 5px 14px; border-radius: 100px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem,5vw,2.9rem); font-weight: 800;
+    background: linear-gradient(135deg,#e8edf8 30%,var(--blue-200) 70%,var(--accent) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1.1; text-align: center; letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    font-size: 15px; color: var(--text-secondary);
+    text-align: center; max-width: 520px; line-height: 1.6;
+  }
+
+  .divider {
+    width: 60px; height: 2px;
+    background: linear-gradient(90deg,transparent,var(--accent),transparent); margin: 4px 0;
+  }
+
+  main {
+    width: 100%; max-width: 860px;
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    gap: 24px;
+  }
+
+  .card {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--radius); backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px); padding: 32px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg,transparent,rgba(0,200,255,0.35),transparent);
+  }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-secondary); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-title span { color: var(--accent); font-size: 16px; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius);
+    padding: 52px 32px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+    cursor: pointer; transition: all 0.3s ease;
+    position: relative; background: rgba(13,26,62,0.3);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent); background: var(--accent-dim);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0,200,255,0.1);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0;
+    cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon {
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg,var(--navy-700),var(--navy-600));
+    border: 1px solid var(--glass-border); border-radius: 18px;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    transition: transform 0.3s ease;
+  }
+  .drop-zone:hover .drop-icon { transform: scale(1.1) rotate(-4deg); }
+  .drop-label { font-family: 'Syne',sans-serif; font-size: 17px;
+    font-weight: 600; color: var(--text-primary); }
+  .drop-sub { font-size: 13px; color: var(--text-muted);
+  }
+
+  .file-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,200,255,0.1); border: 1px solid rgba(0,200,255,0.25);
+    border-radius: 100px; padding: 8px 18px;
+    font-size: 13px; color: var(--accent); font-weight: 500;
+    word-break: break-all; animation: chipIn 0.35s ease;
+  }
+  @keyframes chipIn { from{opacity:0;transform:scale(0.9);} to{opacity:1;transform:scale(1);} }
+
+  /* Config grid */
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(185px,1fr)); gap: 14px;
+  }
+  .config-item {
+    background: rgba(8,15,40,0.5); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .config-item label {
+    font-size: 10px;
+    font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .config-item .val { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:var(--accent); }
+  .config-item .val.sm { font-size:12px; color:var(--blue-200); word-break:break-all; line-height:1.5; }
+
+  /* Buttons */
+  #btn-process {
+    width: 100%;
+    padding: 18px; border: none; border-radius: var(--radius);
+    background: linear-gradient(135deg,var(--blue-400),var(--navy-500));
+    color: #fff; font-family: 'Syne',sans-serif; font-size: 15px; font-weight: 700;
+    letter-spacing: 0.08em; cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative; overflow: hidden; box-shadow: 0 8px 32px rgba(59,111,212,0.35);
+  }
+  #btn-process::after {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent);
+    opacity:0; transition:opacity 0.25s;
+  }
+  #btn-process:hover:not(:disabled)::after { opacity:1; }
+  #btn-process:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 14px 40px rgba(59,111,212,0.5); }
+  #btn-process:disabled {
+    background:linear-gradient(135deg,var(--navy-700),var(--navy-800));
+    color:var(--text-muted); cursor:not-allowed; box-shadow:none;
+  }
+
+  #btn-download {
+    display:none; width:100%; padding:18px; border:none; border-radius:var(--radius);
+    background:linear-gradient(135deg,#00b48a,#00e5a0);
+    color:var(--navy-950); font-family:'Syne',sans-serif; font-size:15px; font-weight:800;
+    letter-spacing:0.06em; cursor:pointer;
+    transition:all 0.25s ease;
+    box-shadow:0 8px 32px rgba(0,229,160,0.3); animation:btnAppear 0.5s ease; margin-top:16px;
+  }
+  #btn-download.show { display:block; }
+  #btn-download:hover { transform:translateY(-2px); box-shadow:0 14px 40px rgba(0,229,160,0.45); }
+  @keyframes btnAppear { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+
+  #btn-reset {
+    background:none;
+    border:none; color:var(--text-muted); font-size:12px;
+    cursor:pointer; text-decoration:underline; font-family:'DM Sans',sans-serif;
+    padding:0; transition:color 0.2s; display:none;
+  }
+  #btn-reset:hover { color:var(--error); }
+
+  /* Progress */
+  .progress-wrap { display:none; flex-direction:column; gap:10px; margin-bottom:20px; }
+  .progress-wrap.show { display:flex; }
+  .progress-bar-track {
+    background:rgba(8,15,40,0.7); border-radius:100px; height:6px;
+    overflow:hidden; border:1px solid var(--glass-border);
+  }
+  .progress-bar-fill {
+    height:100%; width:0%; border-radius:100px;
+    background:linear-gradient(90deg,var(--blue-400),var(--accent));
+    transition:width 0.4s ease; box-shadow:0 0 12px rgba(0,200,255,0.5);
+  }
+  .progress-steps { display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto; }
+  .step-line {
+    display:flex; align-items:flex-start; gap:10px; font-size:13px;
+    color:var(--text-muted);
+    animation:stepIn 0.3s ease; transition:color 0.3s;
+  }
+  .step-line.done   { color:var(--success); }
+  .step-line.active { color:var(--text-primary); }
+  .step-line.err    { color:var(--error); }
+  .step-dot { width:8px; height:8px; margin-top:4px; border-radius:50%; background:currentColor; flex-shrink:0; box-shadow:0 0 6px currentColor; }
+  @keyframes stepIn { from{opacity:0;transform:translateX(-8px);} to{opacity:1;transform:translateX(0);} }
+
+  /* Result */
+  .result-box {
+    background:rgba(4,9,26,0.7);
+    border:1px solid var(--glass-border);
+    border-radius:var(--radius-sm); padding:18px;
+    font-size:13px; color:var(--text-secondary); line-height:1.7;
+    display:none; word-break:break-all; margin-bottom:16px;
+  }
+  .result-box.show    { display:block; }
+  .result-box.success { border-color:rgba(0,229,160,0.3); color:var(--success); }
+  .result-box.error   { border-color:rgba(255,83,112,0.3); color:var(--error); }
+
+  /* Stats */
+  .stats-row { display:none; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+  .stats-row.show { display:grid; }
+  .stat-card {
+    background:rgba(8,15,40,0.5); border:1px solid var(--glass-border);
+    border-radius:var(--radius-sm); padding:18px; text-align:center; animation:chipIn 0.4s ease;
+  }
+  .stat-card .stat-val {
+    font-family:'Syne',sans-serif; font-size:26px; font-weight:800;
+    background:linear-gradient(135deg,var(--blue-300),var(--accent));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  }
+  .stat-card .stat-lbl {
+    font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-top:4px;
+  }
+
+  /* Accordion */
+  .info-toggle {
+    background:none; border:none; color:var(--text-secondary); font-size:13px;
+    cursor:pointer; display:flex; align-items:center; gap:8px;
+    padding:0; transition:color 0.2s; font-family:'DM Sans',sans-serif; width:100%;
+  }
+  .info-toggle:hover { color:var(--accent); }
+  .info-panel { max-height:0; overflow:hidden; transition:max-height 0.4s ease; }
+  .info-panel.open { max-height:1000px; }
+  .info-panel-inner { padding-top:20px; display:flex; flex-direction:column; gap:10px; }
+  .rule-item { display:flex; gap:12px; font-size:13px; color:var(--text-secondary); line-height:1.6; }
+  .rule-item .num {
+    font-family:'Syne',sans-serif; font-weight:700; color:var(--accent);
+    flex-shrink:0; width:22px; text-align:right;
+  }
+
+  .spin {
+    display:inline-block; width:14px; height:14px;
+    border:2px solid rgba(255,255,255,0.2); border-top-color:#fff;
+    border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:8px;
+  }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  footer {
+    margin-top:48px; font-size:12px; color:var(--text-muted); text-align:center;
+    z-index:1; position:relative;
+  }
+
+  @media(max-width:520px){
+    .stats-row{grid-template-columns:1fr 1fr;} .card{padding:22px 18px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge">Engenharia de Dados</div>
+  <h1>Tratamento de Dados<br>Marcolin</h1>
+  <div class="divider"></div>
+  <p class="subtitle">Processamento automático de planilhas de importação: deduplicação, cálculos, formatação de campos e exportação estruturada em 63 colunas.</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <div class="card-title"><span>📂</span> Arquivo de Entrada</div>
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".xlsx,.xls,.csv" />
+      <div class="drop-icon">📊</div>
+      <div class="drop-label">Arraste o arquivo aqui</div>
+      <div class="drop-sub">ou clique para selecionar &nbsp;·&nbsp; .xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv</div>
+    </div>
+    <div id="file-chip-wrap" style="margin-top:16px;display:none;">
+      <div class="file-chip">📄 <span id="file-name-txt">—</span></div>
+    </div>
+  </div>
+
+  <div class="card" id="config-card" style="display:none;">
+    <div class="card-title"><span>⚙️</span> Regras de Processamento</div>
+    <div class="config-grid">
+      <div class="config-item"><label>Linhas por Nota</label><div class="val">265</div></div>
+      <div class="config-item"><label>CFOP Fixo</label><div class="val sm">3102/01</div></div>
+      <div class="config-item"><label>Despesas</label><div class="val sm">PIS + COFINS + Tx.Siscomex</div></div>
+      <div class="config-item"><label>Base IPI Unit.</label><div class="val sm">Base IPI ÷ Qtde (2 casas)</div></div>
+      <div class="config-item"><label>CIF Unitário</label><div class="val sm">2 casas · vírgula</div></div>
+      <div class="config-item"><label>5 casas decimais</label><div class="val sm">Fob · Frete · Seguro · Peso Bruto · Base Final ICMS · BASE IBS · Valor CBS</div></div>
+      <div class="config-item"><label>Zeros à esquerda</label><div class="val sm">Adicao e Seq.Item DI → zfill(3)</div></div>
+      <div class="config-item"><label>TAXSITUATION</label><div class="val sm">Prefixo "00" adicionado</div></div>
+      <div class="config-item"><label>Dedup. por</label><div class="val sm">Colunas G + H (posições 6 e 7)</div></div>
+      <div class="config-item"><label>Colunas na Saída</label><div class="val">63</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span>🔄</span> Processar</div>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="progress-steps" id="steps"></div>
+    </div>
+
+    <div class="result-box" id="result-box"></div>
+
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="stat-val" id="stat-rows">—</div><div class="stat-lbl">Linhas Finais</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-notas">—</div><div class="stat-lbl">Notas Geradas</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-dup">—</div><div class="stat-lbl">Duplicatas Removidas</div></div>
+    </div>
+
+    <button id="btn-process" disabled>Selecione um arquivo para processar</button>
+    <button id="btn-download" onclick="downloadFile()">⬇ Baixar Planilha Tratada (.xlsx)</button>
+    <div style="margin-top:12px;">
+      <button id="btn-reset" onclick="resetAll()">↩ Reiniciar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <button class="info-toggle" onclick="toggleInfo()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M7 6.5v4M7 4.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      O que este processador faz?
+      <svg id="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.3s;margin-left:auto;">
+        <path d="M2 4.5l4 3.5 4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="info-panel" id="info-panel">
+      <div class="info-panel-inner">
+        <div class="rule-item"><span class="num">1</span><span>Lê <b>.xlsx</b>, <b>.xls</b> e <b>.csv</b> tratando todas as células como <b>texto</b> desde o início — sem inferência automática de tipos.</span></div>
+        <div class="rule-item"><span class="num">2</span><span>Cria <b>[M TRANSPORTE]</b> como espelho de <em>VIA DE TRANSPORTE</em> (fallback: índice posicional 41).</span></div>
+        <div class="rule-item"><span class="num">3</span><span>Mapeia <b>Produto_1 → Produto</b> e <b>Produto_2 → MATRZ</b> (fallback: índices 52 e 53).</span></div>
+        <div class="rule-item"><span class="num">4</span><span>Remove duplicatas usando as <b>colunas de posição G (índice 6) e H (índice 7)</b> do arquivo original.</span></div>
+        <div class="rule-item"><span class="num">5</span><span>Gera <b>[Nota]</b> sequencial a cada bloco de <b>265 linhas</b>, após deduplicação.</span></div>
+        <div class="rule-item"><span class="num">6</span><span>Preenche <b>[CFOP]</b> com o valor fixo <b>3102/01</b>.</span></div>
+        <div class="rule-item"><span class="num">7</span><span>Calcula <b>[Despesas]</b> = PIS + COFINS + Tx. Siscomex e <b>[Base IPI Unitario]</b> = Base IPI / Qtde. Converte valores em formato BR (ex: <em>1.500,50</em>) corretamente antes da matemática.</span></div>
+        <div class="rule-item"><span class="num">8</span><span><b>CIF Unitário e Base IPI Unitario</b>: 2 casas decimais. <b>Peso Bruto, Fob, Frete, Seguro, Base Final do ICMS, BASE IBS, Valor CBS</b>: 5 casas decimais.</span></div>
+        <div class="rule-item"><span class="num">9</span><span><b>Adicao</b> e <b>Seq.Item DI</b>: preenchidos com zeros à esquerda até 3 dígitos (<em>zfill 3</em>). <b>TAXSITUATION</b>: prefixo <b>"00"</b> adicionado.</span></div>
+        <div class="rule-item"><span class="num">10</span><span>Reordena e exporta exatamente as <b>63 colunas</b> do layout final.</span></div>
+        <div class="rule-item"><span class="num">11</span><span>Conversão final nas colunas não protegidas: remove <em>nan/NaN/None</em>, elimina sufixo <em>.0</em>, troca ponto por vírgula somente em campos com dígitos.</span></div>
+        <div class="rule-item"><span class="num">12</span><span>Gera <b>TRATADO_[nome original].xlsx</b> para download direto.</span></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>Marcolin · Tratamento de Dados &nbsp;·&nbsp; Engenharia de Dados</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let selectedFile   = null;
+let outputWorkbook = null;
+let outputFilename = '';
+
+// ─── File handling ────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('file-input');
+const dropZone  = document.getElementById('drop-zone');
+
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) {
+    alert('Formato não suportado. Use .xlsx, .xls ou .csv'); return;
+  }
+  selectedFile = file;
+  document.getElementById('file-name-txt').textContent = file.name;
+  document.getElementById('file-chip-wrap').style.display = 'block';
+  document.getElementById('config-card').style.display    = 'block';
+
+  const btn = document.getElementById('btn-process');
+  btn.disabled    = false;
+  btn.textContent = '▶ Iniciar Processamento';
+
+  // limpa estado anterior
+  outputWorkbook = null;
+  document.getElementById('btn-download').classList.remove('show');
+  const rb = document.getElementById('result-box');
+  rb.className = 'result-box'; rb.textContent = '';
+  document.getElementById('stats-row').classList.remove('show');
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('steps').innerHTML = '';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('btn-reset').style.display = 'none';
+}
+
+// ─── Process ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-process').addEventListener('click', () => {
+  if (selectedFile) processFile(selectedFile);
+});
+
+async function processFile(file) {
+  const btn     = document.getElementById('btn-process');
+  const pw      = document.getElementById('progress-wrap');
+  const fillEl  = document.getElementById('progress-fill');
+  const stepsEl = document.getElementById('steps');
+  const resBox  = document.getElementById('result-box');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Processando...';
+  pw.classList.add('show');
+  stepsEl.innerHTML = '';
+  resBox.className  = 'result-box';
+  resBox.textContent = '';
+  document.getElementById('btn-download').classList.remove('show');
+  document.getElementById('stats-row').classList.remove('show');
+  document.getElementById('btn-reset').style.display = 'none';
+
+  const log = (msg, status='active') => {
+    const el = document.createElement('div');
+    el.className = `step-line ${status}`;
+    el.innerHTML = `<div class="step-dot"></div><span>${msg}</span>`;
+    stepsEl.appendChild(el);
+    stepsEl.scrollTop = stepsEl.scrollHeight;
+    return el;
+  };
+  const progress = p => { fillEl.style.width = p + '%'; };
+
+  try {
+    // ── 1. Leitura — tudo como STRING (RAW: TRUE para simular o dtype=str do Python) ───
+    const s1 = log('Lendo arquivo (modo texto estrito)...');
+    await tick();
+    const buf    = await file.arrayBuffer();
+    
+    // Ler o arquivo forçando o valor bruto (raw: true)
+    // Isso evita que o SheetJS injete moedas (R$) na leitura, o que estragava o Fob/Frete/Seguro
+    const wb     = XLSX.read(buf, { type:'array', raw:true, cellDates:false, cellNF:false });
+    const ws     = wb.Sheets[wb.SheetNames[0]];
+    const matrixRaw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+
+    if (matrixRaw.length < 2) throw new Error('Arquivo vazio ou sem dados.');
+
+    // Converte e blinda tudo para String imediatamente, como o Python faz!
+    const matrix = matrixRaw.map(row => row.map(cell => {
+      if (cell === null || cell === undefined) return '';
+      return String(cell).trim();
+    }));
+
+    const headers  = matrix[0];
+    let   rows     = matrix.slice(1);
+
+    // Remove linhas fantasmas (descarta qualquer linha onde TODAS as células estejam vazias)
+    rows = rows.filter(row => row.some(cell => cell !== ''));
+
+    s1.className = 'step-line done';
+    log(`${rows.length} linhas lidas · ${headers.length} colunas`, 'done');
+    progress(8);
+    await tick();
+
+    // ── 2. M TRANSPORTE ─────────────────────────────────────────────────────
+    const s2 = log('Criando coluna M TRANSPORTE...');
+    await tick();
+    const idxVT = headers.indexOf('VIA DE TRANSPORTE');
+    const idxMT = idxVT >= 0 ? idxVT : (headers.length > 41 ? 41 : -1);
+    s2.className = 'step-line done'; progress(15); await tick();
+
+    // ── 3. Produto / MATRZ ──────────────────────────────────────────────────
+    const s3 = log('Mapeando Produto e MATRZ...');
+    await tick();
+    const idxP1 = headers.indexOf('Produto_1') >= 0 ? headers.indexOf('Produto_1') : (headers.length > 52 ? 52 : -1);
+    const idxP2 = headers.indexOf('Produto_2') >= 0 ? headers.indexOf('Produto_2') : (headers.length > 53 ? 53 : -1);
+    s3.className = 'step-line done'; progress(22); await tick();
+
+    // ── 4. Dedup pelas colunas G (idx 6) e H (idx 7) ───────────────────────
+    const s4 = log('Removendo duplicatas (colunas G e H — posições 6 e 7)...');
+    await tick();
+    const origLen = rows.length;
+    const seen    = new Set();
+    rows = rows.filter(row => {
+      const key = String(row[6] ?? '') + '\x00' + String(row[7] ?? '');
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+    const dupRemoved = origLen - rows.length;
+    s4.className = 'step-line done';
+    log(`${dupRemoved} duplicata(s) removida(s) — ${origLen} → ${rows.length} linhas`, 'done');
+    progress(32);
+    await tick();
+
+    // ── 5. Nota: (index // 265) + 1 ─────────────────────────────────────────
+    const s5 = log('Gerando coluna Nota...');
+    await tick();
+    s5.className = 'step-line done'; progress(38); await tick();
+
+    // ── 6. CFOP = "3102/01" ─────────────────────────────────────────────────
+    const s6 = log('Definindo CFOP = 3102/01...');
+    await tick();
+    s6.className = 'step-line done'; progress(43); await tick();
+
+    // ── 7. Cálculos Matemáticos (Despesas e Base IPI Unitario) ────────────────
+    const s7 = log('Calculando Despesas e Base IPI Unitário...');
+    await tick();
+
+    const idxPIS     = headers.indexOf('PIS Recolhido');
+    const idxCOF     = headers.indexOf('COFINS Recolhido');
+    const idxTAXA    = headers.indexOf('Tx. Siscomex');
+    const idxBaseIPI = headers.indexOf('Base IPI Unitario');
+    const idxQtde    = headers.indexOf('Qtde');
+
+    const despesasVec = [];
+    const baseIpiVec  = [];
+
+    rows.forEach(row => {
+      // 7.1 Despesas = PIS + COFINS + TAXA
+      const pis    = idxPIS  >= 0 ? converterParaFloat(row[idxPIS]) : 0.0;
+      const cofins = idxCOF  >= 0 ? converterParaFloat(row[idxCOF]) : 0.0;
+      const taxa   = idxTAXA >= 0 ? converterParaFloat(row[idxTAXA]) : 0.0;
+      despesasVec.push(formatarValor(pis + cofins + taxa, 2));
+
+      // 7.2 Base IPI Unitario = Base IPI / Qtde
+      if (idxBaseIPI >= 0 && idxQtde >= 0) {
+        const b = converterParaFloat(row[idxBaseIPI]);
+        const q = converterParaFloat(row[idxQtde]);
+        baseIpiVec.push(q !== 0 ? formatarValor(b / q, 2) : String(row[idxBaseIPI] ?? ''));
+      } else {
+        baseIpiVec.push(idxBaseIPI >= 0 ? String(row[idxBaseIPI] ?? '') : '');
+      }
+    });
+    s7.className = 'step-line done'; progress(52); await tick();
+
+    // ── 8. Formatação de casas decimais ──────────────────────────────────────
+    const s8 = log('Formatando casas decimais (CIF Unitário e 5 casas decimais)...');
+    await tick();
+    const idxCIF = headers.indexOf('CIF Unitario');
+    const COLS_5_CASAS = ['Peso Bruto','Fob','Frete','Seguro','Base Final do ICMS','BASE IBS','Valor CBS'];
+    const idxs5 = COLS_5_CASAS.map(c => headers.indexOf(c));
+
+    rows = rows.map(row => {
+      const r = row.slice();
+      if (idxCIF >= 0) r[idxCIF] = formatarValor(String(r[idxCIF] ?? ''), 2);
+      idxs5.forEach(idx => {
+        if (idx >= 0) r[idx] = formatarValor(String(r[idx] ?? ''), 5);
+      });
+      return r;
+    });
+    s8.className = 'step-line done'; progress(62); await tick();
+
+    // ── 9. Zeros à esquerda e prefixos ──────────────────────────────────────
+    const s9 = log('Aplicando zeros à esquerda (Adicao, Seq.Item DI) e prefixo TAXSITUATION...');
+    await tick();
+    const idxAdicao  = headers.indexOf('Adicao');
+    const idxSeqItem = headers.indexOf('Seq.Item DI');
+    const idxTaxSit  = headers.indexOf('TAXSITUATION');
+
+    rows = rows.map(row => {
+      const r = row.slice();
+      // Adicao
+      if (idxAdicao >= 0) {
+        let v = limpaNanPonto0(String(r[idxAdicao] ?? ''));
+        r[idxAdicao] = v !== '' ? v.padStart(3, '0') : '';
+      }
+      // Seq.Item DI
+      if (idxSeqItem >= 0) {
+        let v = limpaNanPonto0(String(r[idxSeqItem] ?? ''));
+        r[idxSeqItem] = v !== '' ? v.padStart(3, '0') : '';
+      }
+      // TAXSITUATION
+      if (idxTaxSit >= 0) {
+        let v = limpaNanPonto0(String(r[idxTaxSit] ?? ''));
+        r[idxTaxSit] = v !== '' ? '00' + v : '';
+      }
+      return r;
+    });
+    s9.className = 'step-line done'; progress(72); await tick();
+
+    // ── 10 & 11. Montar 63 colunas + conversão final ─────────────────────────
+    const s10 = log('Reordenando 63 colunas e aplicando conversão final...');
+    await tick();
+
+    const COLUNAS_FINAIS = [
+      "Nota","Nr.DI","Data DI","Pedido","Produto","MATRZ","Adicao","Seq.Item DI",
+      "NCM","Fob","Frete","Seguro","Acrescimo","Deducao","Qtde","Unidade",
+      "CIF Unitario","CIF Total","II Recolhido","% II","Base do IPI","% IPI",
+      "IPI Recolhido","Base do ICMS","Base Final do ICMS","% ICMS","ICMS",
+      "Base Pis/Cofins","% Pis","PIS Recolhido","% Cofins","COFINS Recolhido",
+      "Tx. Siscomex","Peso Liquido","Peso Bruto","CFOP","Base IPI Unitario",
+      "Despesas","N/Ref","S/Ref","MULTA","VIA DE TRANSPORTE","AFRMM",
+      "TIPO DE INTERMEDIO","M TRANSPORTE","Centro","TAXLW1","TAXLW2",
+      "TAXLW4","TAXLW5","Fabricante","Região Desembaraço","Local Desembaraço",
+      "Exportador","BASE IBS","Aliquota IBS","Campo Est.","Valor IBS",
+      "BASE CBS","Aliquota CBS","Campo Esta.","Valor CBS","TAXSITUATION"
+    ];
+
+    // Colunas que JÁ foram tratadas — NÃO aplicar cleanVal nelas!
+    const JA_FORMATADAS = new Set([
+      'CIF Unitario','Peso Bruto','Despesas','CFOP','Adicao','Seq.Item DI',
+      'Fob','Frete','Seguro','Base Final do ICMS','BASE IBS','Valor CBS',
+      'TAXSITUATION','Base IPI Unitario'
+    ]);
+
+    const hIdx = {};
+    headers.forEach((h, i) => { hIdx[h] = i; });
+
+    const outputData = rows.map((row, i) => {
+      const obj = {};
+      for (const col of COLUNAS_FINAIS) {
+        let val = '';
+
+        if (col === 'Nota') {
+          val = String(Math.floor(i / 265) + 1);
+
+        } else if (col === 'CFOP') {
+          val = '3102/01';
+
+        } else if (col === 'Despesas') {
+          val = despesasVec[i];
+
+        } else if (col === 'Base IPI Unitario') {
+          val = baseIpiVec[i];
+
+        } else if (col === 'M TRANSPORTE') {
+          val = idxMT >= 0 ? String(row[idxMT] ?? '') : ('M TRANSPORTE' in hIdx ? String(row[hIdx['M TRANSPORTE']] ?? '') : '');
+
+        } else if (col === 'Produto') {
+          val = idxP1 >= 0 ? String(row[idxP1] ?? '') : ('Produto' in hIdx ? String(row[hIdx['Produto']] ?? '') : '');
+
+        } else if (col === 'MATRZ') {
+          val = idxP2 >= 0 ? String(row[idxP2] ?? '') : ('MATRZ' in hIdx ? String(row[hIdx['MATRZ']] ?? '') : '');
+
+        } else if (col in hIdx) {
+          // Engloba todo o resto que foi manipulado nos índices posicinais
+          val = String(row[hIdx[col]] ?? '');
+        }
+
+        // ── Etapa 11: conversão final ──
+        if (!JA_FORMATADAS.has(col)) {
+          val = cleanVal(val);
+        }
+
+        obj[col] = val;
+      }
+      return obj;
+    });
+
+    s10.className = 'step-line done'; progress(90); await tick();
+
+    // ── 12. Gerar XLSX ──────────────────────────────────────────────────────
+    const s12 = log('Gerando arquivo de saída...');
+    await tick();
+    const outWs = XLSX.utils.json_to_sheet(outputData, { header: COLUNAS_FINAIS });
+    const outWb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(outWb, outWs, 'Tratado');
+
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    outputFilename = 'TRATADO_' + baseName + '.xlsx';
+    outputWorkbook = outWb;
+    s12.className = 'step-line done'; progress(100);
+    await tick();
+
+    // ── Stats ──────────────────────────────────────────────────────────────
+    const totalLinhas = outputData.length;
+    const totalNotas  = totalLinhas > 0 ? Math.floor((totalLinhas - 1) / 265) + 1 : 0;
+
+    document.getElementById('stat-rows').textContent  = totalLinhas.toLocaleString('pt-BR');
+    document.getElementById('stat-notas').textContent = totalNotas;
+    document.getElementById('stat-dup').textContent   = dupRemoved;
+    document.getElementById('stats-row').classList.add('show');
+
+    resBox.textContent = '✅ Processamento concluído! ' + totalLinhas + ' linhas → ' + outputFilename;
+    resBox.classList.add('show','success');
+    document.getElementById('btn-download').classList.add('show');
+    document.getElementById('btn-reset').style.display = 'inline';
+    btn.textContent = '✓ Processado';
+
+  } catch (err) {
+    log('Erro: ' + err.message, 'err'); progress(100);
+    resBox.textContent = '❌ Erro: ' + err.message;
+    resBox.classList.add('show','error');
+    btn.disabled    = false;
+    btn.textContent = '↩ Tentar novamente';
+    document.getElementById('btn-reset').style.display = 'inline';
+    console.error(err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FUNÇÕES AUXILIARES (Fortificadas contra strings do Excel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function converterParaFloat(val) {
+  const s = String(val ?? '').trim();
+  if (s === '' || s.toLowerCase() === 'nan') return 0.0;
+
+  // Blinda contra símbolos inseridos pelo Excel (R$, letras, espaços na formatação)
+  let v = s.replace(/[^\d.,-]/g, '');
+
+  if (v.includes('.') && v.includes(',')) {
+    // Para resolver com precisão se é US (1,500.50) ou BR (1.500,50)
+    if (v.indexOf(',') > v.indexOf('.')) {
+      // Padrão BR: 1.500,50 → 1500.50
+      v = v.replace(/\./g, '').replace(/,/g, '.');
+    } else {
+      // Padrão US: 1,500.50 → 1500.50
+      v = v.replace(/,/g, '');
+    }
+  } else if (v.includes(',')) {
+    // Apenas vírgula decimal: 15,50 → 15.50
+    v = v.replace(/,/g, '.');
+  }
+  
+  const num = parseFloat(v);
+  return isNaN(num) ? 0.0 : num;
+}
+
+function formatarValor(val, casas) {
+  const s = String(val ?? '').trim();
+  if (s === '' || s.toLowerCase() === 'nan') return '';
+  try {
+    const num = converterParaFloat(s);
+    return num.toFixed(casas).replace('.', ',');
+  } catch (e) {
+    return '';
+  }
+}
+
+function limpaNanPonto0(s) {
+  if (s === 'nan' || s === 'NaN' || s === 'None') return '';
+  return s.replace(/\.0$/, '');
+}
+
+function cleanVal(val) {
+  let s = String(val ?? '');
+  if (s === 'nan' || s === 'NaN' || s === 'None') return '';
+  s = s.replace(/\.0$/, '');
+  if (s !== '' && /\d/.test(s)) {
+    s = s.replace(/\./g, ',');
+  }
+  return s;
+}
+
+function tick() { return new Promise(r => setTimeout(r, 55)); }
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+function downloadFile() {
+  if (!outputWorkbook) return;
+  XLSX.writeFile(outputWorkbook, outputFilename);
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+function resetAll() {
+  selectedFile = null; outputWorkbook = null; outputFilename = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-chip-wrap').style.display = 'none';
+  document.getElementById('config-card').style.display    = 'none';
+  const btn = document.getElementById('btn-process');
+  btn.disabled = true;
+  btn.textContent = 'Selecione um arquivo para processar';
+  document.getElementById('btn-download').classList.remove('show');
+  const rb = document.getElementById('result-box');
+  rb.className = 'result-box'; rb.textContent = '';
+  document.getElementById('stats-row').classList.remove('show');
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('steps').innerHTML = '';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('btn-reset').style.display = 'none';
+}
+
+// ─── Accordion ────────────────────────────────────────────────────────────────
+function toggleInfo() {
+  const open = document.getElementById('info-panel').classList.toggle('open');
+  document.getElementById('chevron').style.transform = open ? 'rotate(180deg)' : '';
+}
+</script>
+</body>
+</html>
