@@ -143,8 +143,7 @@
   .drop-zone:hover .drop-icon { transform: scale(1.1) rotate(-4deg); }
   .drop-label { font-family: 'Syne',sans-serif; font-size: 17px;
     font-weight: 600; color: var(--text-primary); }
-  .drop-sub { font-size: 13px; color: var(--text-muted);
-  }
+  .drop-sub { font-size: 13px; color: var(--text-muted); }
 
   .file-chip {
     display: flex; align-items: center; gap: 10px;
@@ -335,7 +334,7 @@
       <div class="config-item"><label>5 casas decimais</label><div class="val sm">Fob · Frete · Seguro · Peso Bruto · Base Final ICMS · BASE IBS · Valor CBS</div></div>
       <div class="config-item"><label>Zeros à esquerda</label><div class="val sm">Adicao e Seq.Item DI → zfill(3)</div></div>
       <div class="config-item"><label>TAXSITUATION</label><div class="val sm">Prefixo "00" adicionado</div></div>
-      <div class="config-item"><label>Dedup. por</label><div class="val sm" style="color:var(--success);">Desativado (Mantém Qtde)</div></div>
+      <div class="config-item"><label>Dedup. por</label><div class="val sm">DI + Adicao + Seq.Item</div></div>
       <div class="config-item"><label>Colunas na Saída</label><div class="val">63</div></div>
     </div>
   </div>
@@ -376,18 +375,17 @@
     </button>
     <div class="info-panel" id="info-panel">
       <div class="info-panel-inner">
-        <div class="rule-item"><span class="num">1</span><span>Lê <b>.xlsx</b>, <b>.xls</b> e <b>.csv</b> tratando todas as células como <b>texto</b> desde o início — sem inferência automática de tipos.</span></div>
-        <div class="rule-item"><span class="num">2</span><span>Cria <b>[M TRANSPORTE]</b> como espelho de <em>VIA DE TRANSPORTE</em> (fallback: índice posicional 41).</span></div>
-        <div class="rule-item"><span class="num">3</span><span>Mapeia <b>Produto_1 → Produto</b> e <b>Produto_2 → MATRZ</b> (fallback: índices 52 e 53).</span></div>
-        <div class="rule-item"><span class="num">4</span><span>A remoção de duplicatas foi <b>desativada</b> para garantir que nenhuma linha original seja excluída, mantendo a soma da coluna <b>Qtde</b> 100% intacta.</span></div>
+        <div class="rule-item"><span class="num">1</span><span>Lê <b>.xlsx</b>, <b>.xls</b> e <b>.csv</b> tratando todas as células como <b>texto</b> desde o início.</span></div>
+        <div class="rule-item"><span class="num">2</span><span>Cria <b>[M TRANSPORTE]</b> como espelho de <em>VIA DE TRANSPORTE</em>.</span></div>
+        <div class="rule-item"><span class="num">3</span><span>Mapeia <b>Produto_1 → Produto</b> e <b>Produto_2 → MATRZ</b>.</span></div>
+        <div class="rule-item"><span class="num">4</span><span>Remove duplicatas avaliando a Chave Completa: <b>Nr.DI + Adicao + Seq.Item DI</b> para proteger processos distintos.</span></div>
         <div class="rule-item"><span class="num">5</span><span>Gera <b>[Nota]</b> sequencial a cada bloco de <b>265 linhas</b>.</span></div>
         <div class="rule-item"><span class="num">6</span><span>Preenche <b>[CFOP]</b> com o valor fixo <b>3102/01</b>.</span></div>
-        <div class="rule-item"><span class="num">7</span><span>Calcula <b>[Despesas]</b> = PIS + COFINS + Tx. Siscomex e <b>[Base IPI Unitario]</b> = Base IPI / Qtde. Converte valores em formato BR corretamente antes da matemática.</span></div>
-        <div class="rule-item"><span class="num">8</span><span><b>CIF Unitário e Base IPI Unitario</b>: 2 casas decimais. <b>Peso Bruto, Fob, Frete, Seguro, Base Final do ICMS, BASE IBS, Valor CBS</b>: 5 casas decimais.</span></div>
-        <div class="rule-item"><span class="num">9</span><span><b>Adicao</b> e <b>Seq.Item DI</b>: preenchidos com zeros à esquerda até 3 dígitos (<em>zfill 3</em>). <b>TAXSITUATION</b>: prefixo <b>"00"</b> adicionado.</span></div>
+        <div class="rule-item"><span class="num">7</span><span>Calcula <b>[Despesas]</b> e <b>[Base IPI Unitario]</b>.</span></div>
+        <div class="rule-item"><span class="num">8</span><span>Aplica casas decimais fixas (2 e 5) nas colunas financeiras.</span></div>
+        <div class="rule-item"><span class="num">9</span><span><b>Adicao</b> e <b>Seq.Item DI</b>: preenchidos com zeros à esquerda até 3 dígitos (<em>zfill 3</em>). <b>TAXSITUATION</b>: prefixo <b>"00"</b>.</span></div>
         <div class="rule-item"><span class="num">10</span><span>Reordena e exporta exatamente as <b>63 colunas</b> do layout final.</span></div>
-        <div class="rule-item"><span class="num">11</span><span>Conversão final nas colunas não protegidas: remove <em>nan/NaN/None</em>, elimina sufixo <em>.0</em>, troca ponto por vírgula somente em campos com dígitos.</span></div>
-        <div class="rule-item"><span class="num">12</span><span>Gera <b>TRATADO_[nome original].xlsx</b> para download direto.</span></div>
+        <div class="rule-item"><span class="num">11</span><span>Aplica conversão inteligente: impede que campos válidos (como Qtde) tenham a pontuação corrompida.</span></div>
       </div>
     </div>
   </div>
@@ -429,7 +427,6 @@ function handleFile(file) {
   btn.disabled    = false;
   btn.textContent = '▶ Iniciar Processamento';
 
-  // limpa estado anterior
   outputWorkbook = null;
   document.getElementById('btn-download').classList.remove('show');
   const rb = document.getElementById('result-box');
@@ -479,24 +476,21 @@ async function processFile(file) {
     await tick();
     const buf    = await file.arrayBuffer();
     
-    // Ler o arquivo forçando o valor bruto (raw: true)
     const wb     = XLSX.read(buf, { type:'array', raw:true, cellDates:false, cellNF:false });
     const ws     = wb.Sheets[wb.SheetNames[0]];
     const matrixRaw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
 
     if (matrixRaw.length < 2) throw new Error('Arquivo vazio ou sem dados.');
 
-    // Converte e blinda tudo para String imediatamente, sem aparar espaços que possam gerar falsas duplicatas
     const matrix = matrixRaw.map(row => row.map(cell => {
       if (cell === null || cell === undefined) return '';
       return String(cell); 
     }));
 
-    // Remove apenas espaços dos cabeçalhos para encontrar os índices
     const headers  = matrix[0].map(h => h.trim());
     let   rows     = matrix.slice(1);
 
-    // Remove linhas que estejam 100% vazias (linhas fantasmas no fim do Excel)
+    // Remove linhas 100% vazias no final
     rows = rows.filter(row => row.some(cell => String(cell).trim() !== ''));
 
     s1.className = 'step-line done';
@@ -518,10 +512,27 @@ async function processFile(file) {
     const idxP2 = headers.indexOf('Produto_2') >= 0 ? headers.indexOf('Produto_2') : (headers.length > 53 ? 53 : -1);
     s3.className = 'step-line done'; progress(22); await tick();
 
-    // ── 4. Dedup (DESATIVADO PARA NÃO PERDER QUANTIDADES) ──────────────────
-    const s4 = log('Remoção de duplicatas ignorada para manter a soma de Qtde intacta...');
+    // ── 4. Dedup pelas colunas B(DI) + G(Adicao) + H(Seq) ───────────────────
+    const s4 = log('Removendo duplicatas (DI, Adição e Seq.Item)...');
     await tick();
-    const dupRemoved = 0; // Fixado em 0 pois não estamos deletando mais as linhas
+    const origLen = rows.length;
+    const seen    = new Set();
+    const idxDI   = headers.indexOf('Nr.DI');
+    const idxAd   = headers.indexOf('Adicao');
+    const idxSeq  = headers.indexOf('Seq.Item DI');
+
+    rows = rows.filter(row => {
+      const di  = idxDI  >= 0 ? String(row[idxDI] ?? '') : '';
+      const ad  = idxAd  >= 0 ? String(row[idxAd] ?? '') : '';
+      const seq = idxSeq >= 0 ? String(row[idxSeq] ?? '') : '';
+      
+      if(!di && !ad && !seq) return true; // Protege linhas de formato esquisito
+
+      const key = di + '|' + ad + '|' + seq;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+    const dupRemoved = origLen - rows.length;
     s4.className = 'step-line done';
     progress(32);
     await tick();
@@ -550,13 +561,11 @@ async function processFile(file) {
     const baseIpiVec  = [];
 
     rows.forEach(row => {
-      // 7.1 Despesas = PIS + COFINS + TAXA
       const pis    = idxPIS  >= 0 ? converterParaFloat(row[idxPIS]) : 0.0;
       const cofins = idxCOF  >= 0 ? converterParaFloat(row[idxCOF]) : 0.0;
       const taxa   = idxTAXA >= 0 ? converterParaFloat(row[idxTAXA]) : 0.0;
       despesasVec.push(formatarValor(pis + cofins + taxa, 2));
 
-      // 7.2 Base IPI Unitario = Base IPI / Qtde
       if (idxBaseIPI >= 0 && idxQtde >= 0) {
         const b = converterParaFloat(row[idxBaseIPI]);
         const q = converterParaFloat(row[idxQtde]);
@@ -593,17 +602,14 @@ async function processFile(file) {
 
     rows = rows.map(row => {
       const r = row.slice();
-      // Adicao
       if (idxAdicao >= 0) {
         let v = limpaNanPonto0(String(r[idxAdicao] ?? '').trim());
         r[idxAdicao] = v !== '' ? v.padStart(3, '0') : '';
       }
-      // Seq.Item DI
       if (idxSeqItem >= 0) {
         let v = limpaNanPonto0(String(r[idxSeqItem] ?? '').trim());
         r[idxSeqItem] = v !== '' ? v.padStart(3, '0') : '';
       }
-      // TAXSITUATION
       if (idxTaxSit >= 0) {
         let v = limpaNanPonto0(String(r[idxTaxSit] ?? '').trim());
         r[idxTaxSit] = v !== '' ? '00' + v : '';
@@ -613,7 +619,7 @@ async function processFile(file) {
     s9.className = 'step-line done'; progress(72); await tick();
 
     // ── 10 & 11. Montar 63 colunas + conversão final ─────────────────────────
-    const s10 = log('Reordenando 63 colunas e aplicando conversão final...');
+    const s10 = log('Reordenando 63 colunas e aplicando conversão final segura...');
     await tick();
 
     const COLUNAS_FINAIS = [
@@ -630,11 +636,11 @@ async function processFile(file) {
       "BASE CBS","Aliquota CBS","Campo Esta.","Valor CBS","TAXSITUATION"
     ];
 
-    // Colunas que JÁ foram tratadas — NÃO aplicar cleanVal nelas!
+    // INCLUINDO "Qtde" NA BLINDAGEM (Impede que o script estrague a formatação dela)
     const JA_FORMATADAS = new Set([
       'CIF Unitario','Peso Bruto','Despesas','CFOP','Adicao','Seq.Item DI',
       'Fob','Frete','Seguro','Base Final do ICMS','BASE IBS','Valor CBS',
-      'TAXSITUATION','Base IPI Unitario'
+      'TAXSITUATION','Base IPI Unitario','Qtde'
     ]);
 
     const hIdx = {};
@@ -647,27 +653,28 @@ async function processFile(file) {
 
         if (col === 'Nota') {
           val = String(Math.floor(i / 265) + 1);
-
         } else if (col === 'CFOP') {
           val = '3102/01';
-
         } else if (col === 'Despesas') {
           val = despesasVec[i];
-
         } else if (col === 'Base IPI Unitario') {
           val = baseIpiVec[i];
-
         } else if (col === 'M TRANSPORTE') {
           val = idxMT >= 0 ? String(row[idxMT] ?? '') : ('M TRANSPORTE' in hIdx ? String(row[hIdx['M TRANSPORTE']] ?? '') : '');
-
         } else if (col === 'Produto') {
           val = idxP1 >= 0 ? String(row[idxP1] ?? '') : ('Produto' in hIdx ? String(row[hIdx['Produto']] ?? '') : '');
-
         } else if (col === 'MATRZ') {
           val = idxP2 >= 0 ? String(row[idxP2] ?? '') : ('MATRZ' in hIdx ? String(row[hIdx['MATRZ']] ?? '') : '');
-
+        } else if (col === 'Qtde') {
+          // Trata a Qtde estritamente como número matemático puro e insere na tabela sem formatações falsas
+          let rawQ = idxQtde >= 0 ? String(row[idxQtde] ?? '') : ('Qtde' in hIdx ? String(row[hIdx['Qtde']] ?? '') : '');
+          if (rawQ.trim() === '') {
+            val = '';
+          } else {
+            let floatQ = converterParaFloat(rawQ);
+            val = floatQ.toString().replace('.', ',');
+          }
         } else if (col in hIdx) {
-          // Engloba todo o resto que foi manipulado nos índices posicinais
           val = String(row[hIdx[col]] ?? '');
         }
 
@@ -702,7 +709,7 @@ async function processFile(file) {
 
     document.getElementById('stat-rows').textContent  = totalLinhas.toLocaleString('pt-BR');
     document.getElementById('stat-notas').textContent = totalNotas;
-    document.getElementById('stat-dup').textContent   = dupRemoved; // Ficará com 0
+    document.getElementById('stat-dup').textContent   = dupRemoved;
     document.getElementById('stats-row').classList.add('show');
 
     resBox.textContent = '✅ Processamento concluído! ' + totalLinhas + ' linhas → ' + outputFilename;
@@ -723,7 +730,7 @@ async function processFile(file) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FUNÇÕES AUXILIARES (Fortificadas contra strings do Excel)
+// FUNÇÕES AUXILIARES DE ENGENHARIA (Blindadas contra padrões Excel)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function converterParaFloat(val) {
@@ -763,11 +770,14 @@ function limpaNanPonto0(s) {
 }
 
 function cleanVal(val) {
-  let s = String(val ?? '').trim(); // Removemos espaços desnecessários
+  let s = String(val ?? '').trim();
   if (s === 'nan' || s === 'NaN' || s === 'None') return '';
   s = s.replace(/\.0$/, '');
-  if (s !== '' && /\d/.test(s)) {
-    s = s.replace(/\./g, ',');
+  
+  // REGRA CIRÚRGICA: Só troca ponto por vírgula se for comprovadamente um número decimal no padrão US (Ex: "1234.56").
+  // Isso impede que números como 1.000 se quebrem e sumam da soma do Excel.
+  if (s !== '' && /^-?\d+\.\d+$/.test(s)) {
+    s = s.replace('.', ',');
   }
   return s;
 }
