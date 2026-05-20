@@ -395,6 +395,24 @@
 <footer>Marcolin · Tratamento de Dados &nbsp;·&nbsp; Engenharia de Dados</footer>
 
 <script>
+// ─── Mapa de Posições Padrão de Engenharia (Fallback Absoluto) ─────────────────
+const DEFAULT_POSITIONS = {
+  "Nota": 0, "Nr.DI": 1, "Data DI": 2, "Pedido": 3, "Produto": 4, "Descricao": 5, 
+  "Adicao": 6, "Seq.Item DI": 7, "NCM": 8, "Fob": 9, "Frete": 10, "Seguro": 11, 
+  "Acrescimo": 12, "Deducao": 13, "Qtde": 14, "Unidade": 15, "CIF Unitario": 16, 
+  "CIF Total": 17, "II Recolhido": 18, "% II": 19, "Base do IPI": 20, "% IPI": 21, 
+  "IPI Recolhido": 22, "Base do ICMS": 23, "Base Final do ICMS": 24, "% ICMS": 25, 
+  "ICMS": 26, "Base Pis/Cofins": 27, "% Pis": 28, "PIS Recolhido": 29, "% Cofins": 30, 
+  "COFINS Recolhido": 31, "Tx. Siscomex": 32, "Peso Liquido": 33, "Peso Bruto": 34, 
+  "CFOP": 35, "Base IPI Unitario": 36, "Despesas": 37, "N/Ref": 38, "S/Ref": 39, 
+  "MULTA": 40, "VIA DE TRANSPORTE": 41, "AFRMM": 42, "TIPO DE INTERMEDIO": 43, 
+  "Centro": 44, "TAXLW1": 45, "TAXLW2": 46, "TAXLW4": 47, "TAXLW5": 48, 
+  "Fabricante": 49, "Região Desembaraço": 50, "Local Desembaraço": 51, "Exportador": 52, 
+  "Produto_1": 53, "Produto_2": 54, "BASE IBS": 56, "Aliquota IBS": 57, 
+  "Campo Est.": 58, "Valor IBS": 59, "BASE CBS": 60, "Aliquota CBS": 61, 
+  "Campo Esta.": 62, "Valor CBS": 63, "TAXSITUATION": 64
+};
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let selectedFile   = null;
 let outputWorkbook = null;
@@ -487,10 +505,12 @@ async function processFile(file) {
       return String(cell); 
     }));
 
-    const headers  = matrix[0].map(h => h.trim());
+    // Normalização robusta de cabeçalhos
+    const originalHeaders = matrix[0];
+    const headers = originalHeaders.map(h => String(h).trim());
     let   rows     = matrix.slice(1);
 
-    // Remove linhas 100% vazias no final
+    // Remove linhas de sujeira 100% vazias no final
     rows = rows.filter(row => row.some(cell => String(cell).trim() !== ''));
 
     s1.className = 'step-line done';
@@ -498,35 +518,61 @@ async function processFile(file) {
     progress(8);
     await tick();
 
+    // ── Função Inteligente para Localizar Colunas (Nome, Case ou Fallback Posicional) ──
+    function findColumnIndex(colName, defaultPos) {
+      let idx = headers.findIndex(h => h === colName);
+      if (idx !== -1) return idx;
+      idx = headers.findIndex(h => h.toLowerCase() === colName.toLowerCase());
+      if (idx !== -1) return idx;
+      if (defaultPos !== undefined && defaultPos < headers.length) return defaultPos;
+      if (DEFAULT_POSITIONS[colName] !== undefined && DEFAULT_POSITIONS[colName] < headers.length) return DEFAULT_POSITIONS[colName];
+      return -1;
+    }
+
+    // Mapeamento dinâmico de índices críticos
+    const idxDI        = findColumnIndex('Nr.DI', 1);
+    const idxAdicao    = findColumnIndex('Adicao', 6);
+    const idxSeqItem   = findColumnIndex('Seq.Item DI', 7);
+    const idxFob       = findColumnIndex('Fob', 9);
+    const idxFrete     = findColumnIndex('Frete', 10);
+    const idxSeguro    = findColumnIndex('Seguro', 11);
+    const idxQtde      = findColumnIndex('Qtde', 14);
+    const idxCIF       = findColumnIndex('CIF Unitario', 16);
+    const idxPIS       = findColumnIndex('PIS Recolhido', 29);
+    const idxCOF       = findColumnIndex('COFINS Recolhido', 31);
+    const idxTAXA      = findColumnIndex('Tx. Siscomex', 32);
+    const idxPesoBruto = findColumnIndex('Peso Bruto', 34);
+    const idxBaseIPI   = findColumnIndex('Base IPI Unitario', 36);
+    const idxVT        = findColumnIndex('VIA DE TRANSPORTE', 41);
+    const idxP1        = findColumnIndex('Produto_1', 53);
+    const idxP2        = findColumnIndex('Produto_2', 54);
+    const idxTaxSit    = findColumnIndex('TAXSITUATION', 64);
+    const idxBaseFinalICMS = findColumnIndex('Base Final do ICMS', 24);
+    const idxBaseIBS   = findColumnIndex('BASE IBS', 56);
+    const idxValorCBS   = findColumnIndex('Valor CBS', 61);
+
     // ── 2. M TRANSPORTE ─────────────────────────────────────────────────────
     const s2 = log('Criando coluna M TRANSPORTE...');
     await tick();
-    const idxVT = headers.indexOf('VIA DE TRANSPORTE');
-    const idxMT = idxVT >= 0 ? idxVT : (headers.length > 41 ? 41 : -1);
     s2.className = 'step-line done'; progress(15); await tick();
 
     // ── 3. Produto / MATRZ ──────────────────────────────────────────────────
     const s3 = log('Mapeando Produto e MATRZ...');
     await tick();
-    const idxP1 = headers.indexOf('Produto_1') >= 0 ? headers.indexOf('Produto_1') : (headers.length > 52 ? 52 : -1);
-    const idxP2 = headers.indexOf('Produto_2') >= 0 ? headers.indexOf('Produto_2') : (headers.length > 53 ? 53 : -1);
     s3.className = 'step-line done'; progress(22); await tick();
 
-    // ── 4. Dedup pelas colunas B(DI) + G(Adicao) + H(Seq) ───────────────────
-    const s4 = log('Removendo duplicatas (DI, Adição e Seq.Item)...');
+    // ── 4. Dedup pelas colunas B(DI) + G(Adicao) + H(Seq) com Chave Segura ───
+    const s4 = log('Removendo duplicatas de forma estruturada...');
     await tick();
     const origLen = rows.length;
     const seen    = new Set();
-    const idxDI   = headers.indexOf('Nr.DI');
-    const idxAd   = headers.indexOf('Adicao');
-    const idxSeq  = headers.indexOf('Seq.Item DI');
 
     rows = rows.filter(row => {
-      const di  = idxDI  >= 0 ? String(row[idxDI] ?? '') : '';
-      const ad  = idxAd  >= 0 ? String(row[idxAd] ?? '') : '';
-      const seq = idxSeq >= 0 ? String(row[idxSeq] ?? '') : '';
+      const di  = idxDI >= 0 ? String(row[idxDI] ?? '').trim() : '';
+      const ad  = idxAdicao >= 0 ? String(row[idxAdicao] ?? '').trim() : '';
+      const seq = idxSeqItem >= 0 ? String(row[idxSeqItem] ?? '').trim() : '';
       
-      if(!di && !ad && !seq) return true; // Protege linhas de formato esquisito
+      if(!di && !ad && !seq) return true;
 
       const key = di + '|' + ad + '|' + seq;
       if (seen.has(key)) return false;
@@ -551,12 +597,6 @@ async function processFile(file) {
     const s7 = log('Calculando Despesas e Base IPI Unitário...');
     await tick();
 
-    const idxPIS     = headers.indexOf('PIS Recolhido');
-    const idxCOF     = headers.indexOf('COFINS Recolhido');
-    const idxTAXA    = headers.indexOf('Tx. Siscomex');
-    const idxBaseIPI = headers.indexOf('Base IPI Unitario');
-    const idxQtde    = headers.indexOf('Qtde');
-
     const despesasVec = [];
     const baseIpiVec  = [];
 
@@ -576,29 +616,28 @@ async function processFile(file) {
     });
     s7.className = 'step-line done'; progress(52); await tick();
 
-    // ── 8. Formatação de casas decimais ──────────────────────────────────────
-    const s8 = log('Formatando casas decimais (CIF Unitário e 5 casas decimais)...');
+    // ── 8. Formatação Avançada de casas decimais (In-Place) ───────────────────
+    const s8 = log('Formatando casas decimais de forma precisa...');
     await tick();
-    const idxCIF = headers.indexOf('CIF Unitario');
-    const COLS_5_CASAS = ['Peso Bruto','Fob','Frete','Seguro','Base Final do ICMS','BASE IBS','Valor CBS'];
-    const idxs5 = COLS_5_CASAS.map(c => headers.indexOf(c));
 
     rows = rows.map(row => {
       const r = row.slice();
-      if (idxCIF >= 0) r[idxCIF] = formatarValor(String(r[idxCIF] ?? ''), 2);
-      idxs5.forEach(idx => {
-        if (idx >= 0) r[idx] = formatarValor(String(r[idx] ?? ''), 5);
-      });
+      if (idxPesoBruto >= 0) r[idxPesoBruto] = formatarValor(r[idxPesoBruto], 5);
+      if (idxFob >= 0) r[idxFob] = formatarValor(r[idxFob], 5);
+      if (idxFrete >= 0) r[idxFrete] = formatarValor(r[idxFrete], 5);
+      if (idxSeguro >= 0) r[idxSeguro] = formatarValor(r[idxSeguro], 5);
+      if (idxBaseFinalICMS >= 0) r[idxBaseFinalICMS] = formatarValor(r[idxBaseFinalICMS], 5);
+      if (idxBaseIBS >= 0) r[idxBaseIBS] = formatarValor(r[idxBaseIBS], 5);
+      if (idxValorCBS >= 0) r[idxValorCBS] = formatarValor(r[idxValorCBS], 5);
+      
+      if (idxCIF >= 0) r[idxCIF] = formatarValor(r[idxCIF], 2);
       return r;
     });
     s8.className = 'step-line done'; progress(62); await tick();
 
     // ── 9. Zeros à esquerda e prefixos ──────────────────────────────────────
-    const s9 = log('Aplicando zeros à esquerda (Adicao, Seq.Item DI) e prefixo TAXSITUATION...');
+    const s9 = log('Aplicando máscaras fiscais (Adição, Seq.Item e TAXSITUATION)...');
     await tick();
-    const idxAdicao  = headers.indexOf('Adicao');
-    const idxSeqItem = headers.indexOf('Seq.Item DI');
-    const idxTaxSit  = headers.indexOf('TAXSITUATION');
 
     rows = rows.map(row => {
       const r = row.slice();
@@ -618,8 +657,8 @@ async function processFile(file) {
     });
     s9.className = 'step-line done'; progress(72); await tick();
 
-    // ── 10 & 11. Montar 63 colunas + conversão final ─────────────────────────
-    const s10 = log('Reordenando 63 colunas e aplicando conversão final segura...');
+    // ── 10 & 11. Reordenação em 63 colunas com Varredura de Segurança ─────────
+    const s10 = log('Reordenando as 63 colunas finais e aplicando a blindagem numérica...');
     await tick();
 
     const COLUNAS_FINAIS = [
@@ -636,15 +675,11 @@ async function processFile(file) {
       "BASE CBS","Aliquota CBS","Campo Esta.","Valor CBS","TAXSITUATION"
     ];
 
-    // INCLUINDO "Qtde" NA BLINDAGEM (Impede que o script estrague a formatação dela)
     const JA_FORMATADAS = new Set([
       'CIF Unitario','Peso Bruto','Despesas','CFOP','Adicao','Seq.Item DI',
       'Fob','Frete','Seguro','Base Final do ICMS','BASE IBS','Valor CBS',
       'TAXSITUATION','Base IPI Unitario','Qtde'
     ]);
-
-    const hIdx = {};
-    headers.forEach((h, i) => { hIdx[h] = i; });
 
     const outputData = rows.map((row, i) => {
       const obj = {};
@@ -660,25 +695,27 @@ async function processFile(file) {
         } else if (col === 'Base IPI Unitario') {
           val = baseIpiVec[i];
         } else if (col === 'M TRANSPORTE') {
-          val = idxMT >= 0 ? String(row[idxMT] ?? '') : ('M TRANSPORTE' in hIdx ? String(row[hIdx['M TRANSPORTE']] ?? '') : '');
+          val = idxMT >= 0 ? String(row[idxMT] ?? '') : '';
         } else if (col === 'Produto') {
-          val = idxP1 >= 0 ? String(row[idxP1] ?? '') : ('Produto' in hIdx ? String(row[hIdx['Produto']] ?? '') : '');
+          val = idxP1 >= 0 ? String(row[idxP1] ?? '') : '';
         } else if (col === 'MATRZ') {
-          val = idxP2 >= 0 ? String(row[idxP2] ?? '') : ('MATRZ' in hIdx ? String(row[hIdx['MATRZ']] ?? '') : '');
+          val = idxP2 >= 0 ? String(row[idxP2] ?? '') : '';
         } else if (col === 'Qtde') {
-          // Trata a Qtde estritamente como número matemático puro e insere na tabela sem formatações falsas
-          let rawQ = idxQtde >= 0 ? String(row[idxQtde] ?? '') : ('Qtde' in hIdx ? String(row[hIdx['Qtde']] ?? '') : '');
+          let rawQ = idxQtde >= 0 ? String(row[idxQtde] ?? '') : '';
           if (rawQ.trim() === '') {
             val = '';
           } else {
             let floatQ = converterParaFloat(rawQ);
             val = floatQ.toString().replace('.', ',');
           }
-        } else if (col in hIdx) {
-          val = String(row[hIdx[col]] ?? '');
+        } else {
+          // Varredura via motor inteligente para eliminar erros de colunas com strings vazias
+          let targetIdx = findColumnIndex(col);
+          if (targetIdx >= 0 && targetIdx < row.length) {
+            val = String(row[targetIdx] ?? '');
+          }
         }
 
-        // ── Etapa 11: conversão final ──
         if (!JA_FORMATADAS.has(col)) {
           val = cleanVal(val);
         }
@@ -774,8 +811,6 @@ function cleanVal(val) {
   if (s === 'nan' || s === 'NaN' || s === 'None') return '';
   s = s.replace(/\.0$/, '');
   
-  // REGRA CIRÚRGICA: Só troca ponto por vírgula se for comprovadamente um número decimal no padrão US (Ex: "1234.56").
-  // Isso impede que números como 1.000 se quebrem e sumam da soma do Excel.
   if (s !== '' && /^-?\d+\.\d+$/.test(s)) {
     s = s.replace('.', ',');
   }
