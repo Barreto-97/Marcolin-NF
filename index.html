@@ -518,13 +518,14 @@ async function processFile(file) {
     const idxP2 = headers.indexOf('Produto_2') >= 0 ? headers.indexOf('Produto_2') : (headers.length > 53 ? 53 : -1);
     s3.className = 'step-line done'; progress(22); await tick();
 
-    // ── 4. Dedup pelas colunas G (idx 6) e H (idx 7) ───────────────────────
-    const s4 = log('Removendo duplicatas (colunas G e H — posições 6 e 7)...');
+// ── 4. Dedup pelas colunas B (Nr.DI), G (Adicao) e H (Seq.Item DI) ─────────
+    const s4 = log('Removendo duplicatas por DI, Adição e Seq.Item (B, G e H)...');
     await tick();
     const origLen = rows.length;
     const seen    = new Set();
     rows = rows.filter(row => {
-      const key = String(row[6] ?? '') + '\x00' + String(row[7] ?? '');
+      // Cria a chave única juntando: Nr.DI + Adição + Seq.Item DI
+      const key = String(row[1] ?? '') + '\x00' + String(row[6] ?? '') + '\x00' + String(row[7] ?? '');
       if (seen.has(key)) return false;
       seen.add(key); return true;
     });
