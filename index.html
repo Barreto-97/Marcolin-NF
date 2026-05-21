@@ -531,17 +531,26 @@ async function processFile(file) {
     df.forEach(row => row['CFOP'] = "3102/01");
     s6.className = 'step-line done'; progress(43); await tick();
 
-    // ── 7. SOMA PARA COLUNA AL [Despesas] = PIS + COFINS + TAXA SISCOMEX ──────
-    const s7 = log('Calculando Despesas...');
+    // ── 7. Cálculos Matemáticos (Despesas e Base IPI Unitario) ────────────────
+    const s7 = log('Calculando Despesas e Base IPI Unitário...');
     await tick();
     df.forEach(row => {
+        // Despesas
         let pis = 'PIS Recolhido' in row ? converterParaFloat(row['PIS Recolhido']) : 0.0;
         let cof = 'COFINS Recolhido' in row ? converterParaFloat(row['COFINS Recolhido']) : 0.0;
         let tax = 'Tx. Siscomex' in row ? converterParaFloat(row['Tx. Siscomex']) : 0.0;
         row['Despesas'] = formatarValor(pis + cof + tax, 2);
+
+        // Base IPI Unitario
+        if ('Base IPI Unitario' in row && 'Qtde' in row) {
+            let base_ipi = converterParaFloat(row['Base IPI Unitario']);
+            let qtde = converterParaFloat(row['Qtde']);
+            // Faz a divisão com segurança (evita erro se Qtde for 0) e já formata com 2 casas
+            row['Base IPI Unitario'] = qtde !== 0 ? formatarValor(base_ipi / qtde, 2) : "";
+        }
     });
     s7.className = 'step-line done'; progress(52); await tick();
-
+    
     // ── 8. Formatação CIF Unitario (2) e Peso Bruto (5) ─────────────────────
     const s8 = log('Formatando casas decimais designadas...');
     await tick();
@@ -583,10 +592,138 @@ async function processFile(file) {
       "BASE CBS","Aliquota CBS","Campo Esta.","Valor CBS","TAXSITUATION"
     ];
 
-    const JA_FORMATADAS = new Set(['CIF Unitario', 'Peso Bruto', 'Despesas', 'CFOP', 'Adicao', 'Seq.Item DI']);
+    const JA_FORMATADAS = new Set(['CIF Unitario', 'Peso Bruto', 'Despesas', 'CFOP', 'Adicao', 'Seq.Item DI', 'Base IPI Unitario']);
 
     const outputData = df.map(row => {
       let obj = {};
       for (let col of COLUNAS_FINAIS) {
         
-        //
+        // Emula "if col not in df.columns: df[col] = ''" do Pandas
+        let val = col in row ? row[col] : "";
+
+        if (!JA_FORMATADAS.has(col)) {
+            val = limpaNanPonto0(val);
+            
+            // Emula: x.replace('.', ',') if (x != "" and any(c.isdigit() for c in x)) else x
+            if (val !== "" && /\d/.test(val)) {
+                val = val.replace(/\./g, ',');
+            }
+        }
+        obj[col] = val;
+      }
+      return obj;
+    });
+
+    s10.className = 'step-line done'; progress(90); await tick();
+
+    // ── 12. Gerar XLSX ──────────────────────────────────────────────────────
+    const s12 = log('Gerando arquivo de saída...');
+    await tick();
+    const outWs = XLSX.utils.json_to_sheet(outputData, { header: COLUNAS_FINAIS });
+    const outWb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(outWb, outWs, 'Tratado');
+
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    outputFilename = 'TRATADO_' + baseName + '.xlsx';
+    outputWorkbook = outWb;
+    s12.className = 'step-line done'; progress(100);
+    await tick();
+
+    // ── Stats ──────────────────────────────────────────────────────────────
+    const totalLinhas = outputData.length;
+    const totalNotas  = totalLinhas > 0 ? Math.floor((totalLinhas - 1) / 265) + 1 : 0;
+
+    document.getElementById('stat-rows').textContent  = totalLinhas.toLocaleString('pt-BR');
+    document.getElementById('stat-notas').textContent = totalNotas;
+    document.getElementById('stat-dup').textContent   = dupRemoved;
+    document.getElementById('stats-row').classList.add('show');
+
+    resBox.textContent = '✅ Processamento concluído! ' + totalLinhas + ' linhas → ' + outputFilename;
+    resBox.classList.add('show','success');
+    document.getElementById('btn-download').classList.add('show');
+    document.getElementById('btn-reset').style.display = 'inline';
+    btn.textContent = '✓ Processado';
+
+  } catch (err) {
+    log('Erro: ' + err.message, 'err'); progress(100);
+    resBox.textContent = '❌ Erro: ' + err.message;
+    resBox.classList.add('show','error');
+    btn.disabled    = false;
+    btn.textContent = '↩ Tentar novamente';
+    document.getElementById('btn-reset').style.display = 'inline';
+    console.error(err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FUNÇÕES AUXILIARES DE ENGENHARIA 
+// (Tradução Exata do Python Enviado pelo Usuário)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function converterParaFloat(val) {
+  if (val === null || val === undefined) return 0.0;
+  let val_str = String(val).trim();
+  if (val_str === "" || val_str.toLowerCase() === "nan") return 0.0;
+  
+  if (val_str.includes('.') && val_str.includes(',')) {
+    val_str = val_str.replace(/\./g, '').replace(/,/g, '.');
+  } else if (val_str.includes(',')) {
+    val_str = val_str.replace(/,/g, '.');
+  }
+  
+  let num = parseFloat(val_str);
+  return isNaN(num) ? 0.0 : num;
+}
+
+function formatarValor(val, casas) {
+  if (val === null || val === undefined) return "";
+  let s = String(val).trim();
+  if (s === "" || s.toLowerCase() === "nan") return "";
+  try {
+    let num = converterParaFloat(s);
+    return num.toFixed(casas).replace('.', ',');
+  } catch (e) {
+    return "";
+  }
+}
+
+function limpaNanPonto0(s) {
+  if (s === 'nan' || s === 'NaN' || s === 'None') return '';
+  return s.replace(/\.0$/, '');
+}
+
+function tick() { return new Promise(r => setTimeout(r, 55)); }
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+function downloadFile() {
+  if (!outputWorkbook) return;
+  XLSX.writeFile(outputWorkbook, outputFilename);
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+function resetAll() {
+  selectedFile = null; outputWorkbook = null; outputFilename = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-chip-wrap').style.display = 'none';
+  document.getElementById('config-card').style.display    = 'none';
+  const btn = document.getElementById('btn-process');
+  btn.disabled = true;
+  btn.textContent = 'Selecione um arquivo para processar';
+  document.getElementById('btn-download').classList.remove('show');
+  const rb = document.getElementById('result-box');
+  rb.className = 'result-box'; rb.textContent = '';
+  document.getElementById('stats-row').classList.remove('show');
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('steps').innerHTML = '';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('btn-reset').style.display = 'none';
+}
+
+// ─── Accordion ────────────────────────────────────────────────────────────────
+function toggleInfo() {
+  const open = document.getElementById('info-panel').classList.toggle('open');
+  document.getElementById('chevron').style.transform = open ? 'rotate(180deg)' : '';
+}
+</script>
+</body>
+</html>
